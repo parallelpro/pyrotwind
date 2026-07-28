@@ -1,0 +1,11 @@
+# compiled build artifacts (rebuild via compile_notes)
+*.so
+*.mod
+*.o
+
+# python / notebook cruft
+__pycache__/
+.ipynb_checkpoints/
+
+# os cruft
+.DS_Store

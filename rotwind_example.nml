@@ -1,0 +1,74 @@
+! example namelist input for rotwind (pyrotwind). copy this file, edit the
+! values for your run, and pass its path as the nml_file argument to
+! rotwind (e.g. pyrotwind.rotwind('my_run.nml', ...) from Python).
+!
+! see const.f90 for what the const group controls, and
+! params.f90/setup.f90 for what each wind_params entry means.
+
+&const
+! gravitational constant [cm^3 g^-1 s^-2] and 2/3 (used in the
+! core/envelope angular-momentum-transfer term).
+  cg   = 6.6725d-8
+  cc23 = 0.6666666666666667d0
+
+! pi, and seconds per day / per (julian) year.
+  cpi     = 3.1415926535898d0
+  csecday = 86400.0d0
+  csecyr  = 3.1556952d7
+
+! solar mass, radius, luminosity [g, cm, erg/s].
+  solm = 1.9891d33
+  solr = 6.9598d10
+  soll = 3.8418d33
+
+! solar reference atmospheric pressure at tau=2/3 (cgs) and convective
+! overturn timescale (s), used to normalize the wind loss law.
+  solp   = 100179.864d0
+  soltau = 717053.416d0
+
+! solar equatorial rotation period (days), used to derive solw and the
+! solar rossby number rosun (= solprot*csecday/soltau).
+  solprot = 25.4d0
+/
+
+&wind_params
+! lsolid = t -> solid-body rotation (solidevol); f -> two-zone
+! core/envelope model (drevol).
+  lsolid  = .false.
+
+! iwind: 1 = no angular-momentum loss, 2 = Kawaler (1988), 3 = pmm-style
+! generalized law (requires pmma/pmmb/pmmc/pmmm below).
+  iwind   = 3
+
+! lross = t -> scale the wind-saturation threshold by the rossby number
+! (local convective overturn timescale relative to the sun's).
+  lross   = .true.
+
+! pmm-style loss-law exponents (used when iwind = 3); see setup.
+  pmma = 2.0d0  
+  pmmb = 1.0d0  
+  pmmc = 0.0d0  
+  pmmm = 0.22d0 
+
+! overall normalization of the wind torque (dimensionless multiplier).
+  fk = 5.655d0
+
+! solar calibration values for the wind torque and mass-loss rate.
+  soljdot = 1.3d30 !
+  solmdot = 1.27d12 !
+
+! critical angular velocity (rad/s) for wind saturation
+  wcrit  = 3.863d-5
+
+! critical rossby number below which wind loss is disabled once crossed,
+! expressed in solar units: rocrit = (star_prot/star_tau) /
+! (solar_prot/solar_tau). e.g. rocrit = 2.0 disables wind loss once a
+! star's rotation-period-to-convective-timescale ratio exceeds twice
+! the sun's.
+  rocrit = 2.00d0
+
+! initial (disk-locked) rotation period (days) and disk lifetime (Myr),
+! applied to every track processed this run.
+  pdisk = 4.0d0
+  tlock = 10.0d0
+/

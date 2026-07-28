@@ -1,0 +1,47 @@
+# setup paths for the gfortran compiler via the mesa sdk
+# (required before compiling OR running anything built with this
+# compiler -- without it, compiled executables/modules can fail to find
+# libgfortran.dylib at runtime)
+
+export MESASDK_ROOT=/Applications/mesasdk
+source $MESASDK_ROOT/bin/mesasdk_init.sh
+
+
+# compile the code in fortran alone, producing a standalone "rotwind"
+# executable. note: there is currently no program/main driver in this
+# directory (rotwind is a subroutine meant to be called from Python via
+# f2py) -- add one before using this if you want a standalone binary.
+gfortran -O3 -o rotwind *.f90
+
+# compile with f2py into the "pyrotwind" python module
+f2py -c --fcompiler=gfortran --opt='-O3' -m pyrotwind *.f90
+
+# --- namelist input + one-track-per-call interface (2026) ---
+# pyrotwind processes a single stellar track per call to rotwind, and
+# configuration is read once up front rather than on every call:
+#
+#   1) constm.init_const(nml_file) and params.read_wind_params(nml_file)
+#      are public module subroutines, callable directly from Python.
+#      Call each once, before any calls to rotwind. See
+#      rotwind_example.nml for the const and wind_params namelist
+#      groups they expect, and const.f90/params.f90/setup.f90 for what
+#      each entry means. This also sets pdisk/tlock (disk-locked
+#      rotation period and disk lifetime), applied to every track.
+#   2) rotwind itself no longer takes a namelist file argument, or
+#      pdisk/tlock -- it just runs the integration for one track's
+#      arrays. taucouple is a per-model array (same length as sage/si/
+#      etc.), so the core-envelope coupling timescale can vary along
+#      the track rather than being a single constant per track.
+#
+# example call from Python after building the module above:
+#
+#   import pyrotwind
+#   pyrotwind.constm.init_const('rotwind_example.nml')
+#   pyrotwind.params.read_wind_params('rotwind_example.nml')
+#
+#   for track in tracks:
+#       swe, swc, sj, sje, sjc, sprot, faccen, iermsg = pyrotwind.rotwind(
+#           track.taucouple,   # array, same length as track.sage
+#           track.sage, track.sl, track.sr, track.steffl, track.smcz,
+#           track.srcz, track.sxc, track.si, track.sie, track.sic,
+#           track.staucz, track.shec, track.sp, track.sm, track.nm)
