@@ -98,7 +98,7 @@ subroutine threezoneevol(nm, sage, sicore, sic, sie, staucz, excen, exw, &
     ! the two-zone branch (see header), its spline coefficients, and the
     ! full core+middle+envelope total inertia needed by int1zone
     real(8), dimension(nmod) :: sictot, yictot, sitot
-    logical :: lthree, ltwo, ldisk, lok
+    logical :: lthree, ltwo, ldisk, lok, lrocrit
     real(8) :: wc1, wc0, w1, w0
     real(8) :: taudisk, hh, t0, t1, a, b, sii
     real(8) :: sje0, sjc0, sjcore0, sj0
@@ -122,6 +122,12 @@ subroutine threezoneevol(nm, sage, sicore, sic, sie, staucz, excen, exw, &
         sprot(1) = pdisk
         ldisk = .true.
         taudisk = 1.0d-3*tlock
+        ! local to this track's int1zone calls below (fully-convective
+        ! phase only); see solidevol for what this flag means.
+        ! threezoneevol does not itself act on it once set, matching
+        ! drevol's behavior -- it is only threaded through here because
+        ! int1zone's signature requires it.
+        lrocrit = .false.
         ! set up spline interpolation in the structure variables, exactly
         ! as drevol, plus the extra core-zone quantities
         do j = 1, jj
@@ -420,7 +426,7 @@ subroutine threezoneevol(nm, sage, sicore, sic, sie, staucz, excen, exw, &
                 do k = 1, kk
                     call int1zone(sage, sitot, fstruct, staucz, yi, ystr, ytau, &
                                   sj0, sj1, j, t0, dtt, excen, exw, fcen, &
-                                  fk2, ycen, iermsg)
+                                  fk2, ycen, lrocrit, iermsg)
                     t0 = t0+dtt
                     sj0 = sj1
                 end do

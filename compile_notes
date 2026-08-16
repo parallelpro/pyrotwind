@@ -13,8 +13,22 @@ source $MESASDK_ROOT/bin/mesasdk_init.sh
 # f2py) -- add one before using this if you want a standalone binary.
 gfortran -O3 -o rotwind *.f90
 
-# compile with f2py into the "pyrotwind" python module
-f2py -c --fcompiler=gfortran --opt='-O3' -m pyrotwind *.f90
+# compile with f2py into the "pyrotwind" python module.
+#
+# bsstep_mod.f90's bs_extrapolate takes dummy PROCEDURE arguments (the
+# generic Bulirsch-Stoer retry/extrapolation engine shared by int1zone/
+# int2zone/int3zone -- see that file's header), which f2py's wrapper
+# generator cannot handle: it mis-parses the argument list and emits
+# broken C (an undeclared 'nv' in the generated wrapper). bs_extrapolate
+# is only ever called from Fortran (never from Python), so this is fine
+# to skip explicitly with f2py's "skip:" clause -- everything else is
+# still scanned/wrapped normally. bsstep_mod.f90 must be listed by name
+# (not swept up in *.f90) so the skip: clause applies to it specifically.
+f2py -c --fcompiler=gfortran --opt='-O3' -m pyrotwind \
+  bsstep_mod.f90 skip: bs_extrapolate : \
+  const.f90 params.f90 splinc.f90 ratext.f90 setup.f90 \
+  int1zone.f90 int2zone.f90 int3zone.f90 \
+  solidevol.f90 drevol.f90 threezoneevol.f90 rotwind.f90
 
 # --- namelist input + one-track-per-call interface (2026) ---
 # pyrotwind processes a single stellar track per call to rotwind, and
@@ -62,3 +76,16 @@ f2py -c --fcompiler=gfortran --opt='-O3' -m pyrotwind *.f90
 # tracks even if only some of them ever grow a core. rotwind.f90's
 # outputs swcore/sjcore are only meaningful in this mode; they come back
 # as swcore=swc (corotating with the middle zone) and sjcore=0 otherwise.
+#
+# --- shared Bulirsch-Stoer engine (2026) ---
+# int1zone/int2zone/int3zone used to each carry their own copy of the
+# retry/extrapolation control flow (sub-step-count sequence, the
+# ratext-driving loop, eps-based acceptance) around their own physics.
+# That's now factored into bsstep_mod.f90's bs_extrapolate, called once
+# per routine with the zone-specific physics passed in as two internal
+# (host-associated) procedures -- see bsstep_mod.f90's header for the
+# reset/substep contract, and int1zone.f90 for the simplest example.
+# Behavior is unchanged: this was verified by diffing rotwind() output,
+# to double precision, against the pre-refactor routines across several
+# real MESA tracks spanning the solid-body, two-zone, and three-zone
+# (including tracks that actually grow and evolve a helium core) paths.

@@ -1,0 +1,32 @@
+
+&const
+  cg   = 6.6725d-8
+  cc23 = 0.6666666666666667d0
+  cpi     = 3.1415926535898d0
+  csecday = 86400.0d0
+  csecyr  = 3.1556952d7
+  solm = 1.9891d33
+  solr = 6.9598d10
+  soll = 3.8418d33
+  solp   = 100179.864d0
+  soltau = 717053.416d0
+  solprot = 25.4d0
+/
+
+&wind_params
+  lsolid  = .true.
+  lthreezone = .true.
+  iwind   = 3
+  lross   = .true.
+  pmma = 2.0d0
+  pmmb = 1.0d0
+  pmmc = 0.0d0
+  pmmm = 0.22d0
+  fk = 5.655d0
+  soljdot = 1.3d30
+  solmdot = 1.27d12
+  wcrit  = 3.863d-5
+  rocrit = 0.91d0
+  pdisk = 4.0d0
+  tlock = 10.0d0
+/
