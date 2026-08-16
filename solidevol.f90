@@ -41,6 +41,13 @@
 !                 the two-zone model in drevol); per-model array, kept
 !                 in the argument list for interface symmetry with drevol.
 !
+! lrocrit (whether this track has dropped below the critical rossby
+! number, after which wind loss is disabled for the rest of the track)
+! is local to this routine, initialized fresh at the top of every call
+! (i.e. every track) and threaded into int1zone as an inout argument --
+! not module state, so it cannot leak from one track's evolution into
+! the next track processed in the same run.
+!
 ! pdisk and tlock (initial disk-locked rotation period, days, and disk
 ! lifetime, Myr) are not arguments: they come from the params module
 ! (set once per run by read_wind_params -- see params.f90).
@@ -72,7 +79,7 @@ subroutine solidevol(nm, sage, si, staucz, excen, exw, &
     ! spline interpolation vectors
     real(8), dimension(nmod) :: x, y, ycen, yi, ystr, ytau
     ! logicals
-    logical :: ldisk
+    logical :: ldisk, lrocrit
     real(8) :: taudisk, fx, t0, t1, hh, a, b, sii, sj0, sj1
     real(8) :: fc0, fc1, w0, w1, wc0, wc1, djdt0, djdt1, djdt
     real(8) :: tmax, dt, dtt
@@ -88,6 +95,10 @@ subroutine solidevol(nm, sage, si, staucz, excen, exw, &
         ! initialize disk and disk lifetime in gyr
         ldisk = .true.
         taudisk = 1.0d-3*tlock
+        ! rossby-number cutoff starts disengaged for this track; the
+        ! int1zone call below enables it once (if) the track first drops
+        ! below rocrit.
+        lrocrit = .false.
         ! initialize torque
         ! the loss law has the general form
         ! dj/dt = fstruct*omega^exw, omega < omega(crit);
@@ -241,7 +252,7 @@ subroutine solidevol(nm, sage, si, staucz, excen, exw, &
                 ! across the timestep.  numerical convergence properties are currently hardwired in
                 ! bsstep, to be replaced with user-specified parameters.
                 call int1zone(sage, si, fstruct, staucz, yi, ystr, ytau, sj0, sj1, &
-                               j, t0, dtt, excen, exw, fcen, fk2, ycen, iermsg)
+                               j, t0, dtt, excen, exw, fcen, fk2, ycen, lrocrit, iermsg)
                 t0 = t0+dtt
                 sj0 = sj1
             end do

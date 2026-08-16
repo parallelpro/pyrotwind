@@ -35,12 +35,18 @@
 !   excen, exw  loss-law exponents (see setup)
 !   fk2         centrifugal-suppression constant (see setup)
 !   sj0         angular momentum at the start of the step
+! Inputs/Outputs:
+!   lrocrit     the calling track's rossby-cutoff flag (see solidevol):
+!               left unchanged unless this step is the one where the
+!               critical rossby number is first crossed, in which case
+!               it is set .true. here. Local to the caller's track, not
+!               module state, so it never leaks between tracks.
 ! Outputs:
 !   sj1         angular momentum at the end of the step
 !   iermsg      nonzero on failure (negative intermediate omega)
 !===============================================================================
 subroutine int1zone(sage, si, fstruct, staucz, yi, ystr, ytau, sj0, sj1, &
-                     j, t0, dtt, excen, exw, fcen, fk2, ycen, iermsg)
+                     j, t0, dtt, excen, exw, fcen, fk2, ycen, lrocrit, iermsg)
     use constm
     use params
     implicit none
@@ -56,6 +62,8 @@ subroutine int1zone(sage, si, fstruct, staucz, yi, ystr, ytau, sj0, sj1, &
     real(8), intent(in) :: excen, exw, fk2, t0, dtt, sj0
     integer, intent(in) :: j
     real(8), intent(in), dimension(nmod) :: yi, ystr, ytau, ycen
+    ! inout
+    logical, intent(inout) :: lrocrit
     ! outputs
     real(8), intent(out) :: sj1
     integer, intent(out) :: iermsg

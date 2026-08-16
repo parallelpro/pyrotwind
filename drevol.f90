@@ -77,7 +77,7 @@ subroutine drevol(nm, sage, si, sie, sic, staucz, excen, exw, &
     ! local
     ! spline interpolation vectors
     real(8), dimension(nmod) :: x, y, yi, yie, ystr, ytau, ycz, ycen, ycouple
-    logical :: lcore, ldisk, lok
+    logical :: lcore, ldisk, lok, lrocrit
     real(8) :: wc1, wc0, w1, w0
     real(8) :: taudisk, hh, t0, t1, a, b, sii, sje0, sjc0, sj0, sje1, sjc1, sj1
     real(8) :: tmax, dt, dtt, fc0, fc1, djdt0, djdt1, djdt
@@ -97,6 +97,11 @@ subroutine drevol(nm, sage, si, sie, sic, staucz, excen, exw, &
         ! initialize disk and disk lifetime in gyr
         ldisk = .true.
         taudisk = 1.0d-3*tlock
+        ! local to this track's int1zone calls below (pre-core phase only);
+        ! see solidevol for what this flag means. drevol does not itself
+        ! act on it once set, matching prior behavior -- it is only
+        ! threaded through here because int1zone's signature requires it.
+        lrocrit = .false.
         ! set up spline interpolation in the structure
         ! variables for wind loss, itot and overturn timescale (general case)
         ! also ienv, 2/3 rcz^2 * dmcz/dt (for the decoupled case)
@@ -301,7 +306,7 @@ subroutine drevol(nm, sage, si, sie, sic, staucz, excen, exw, &
                     ! across the timestep.  numerical convergence properties are currently hardwired in
                     ! bsstep, to be replaced with user-specified parameters.
                     call int1zone(sage, si, fstruct, staucz, yi, ystr, ytau, sj0, sj1, &
-                                  j, t0, dtt, excen, exw, fcen, fk2, ycen, iermsg)
+                                  j, t0, dtt, excen, exw, fcen, fk2, ycen, lrocrit, iermsg)
                     t0 = t0+dtt
                     sj0 = sj1
                 end do

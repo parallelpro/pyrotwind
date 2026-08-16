@@ -19,10 +19,14 @@
 ! Python via f2py. pyrotwind processes one track per call, so there is
 ! no separate "number of tracks" dimension.
 !
-! lrocrit is not a user input either: it is run-time state used by
-! solidevol/int1zone to remember that this track has dropped below the
-! critical rossby number, after which wind loss is switched off for
-! the remainder of the track.
+! lrocrit (whether this track has dropped below the critical rossby
+! number, after which wind loss is switched off for the remainder of
+! the track) used to live here as run-time state, but that made it a
+! single flag shared across every track processed in a run instead of
+! being reset per track: read_wind_params (which reset it) only runs
+! once per run, not once per rotwind call, so it could leak from one
+! track into the next. It is now local to solidevol/drevol, threaded
+! explicitly into int1zone as an inout argument instead.
 !===============================================================================
 module params
     implicit none
@@ -30,7 +34,7 @@ module params
     public :: read_wind_params, set_nmod
     public :: fk, pmma, pmmb, pmmc, pmmm, soljdot, solmdot, wcrit, rocrit
     public :: pdisk, tlock
-    public :: lsolid, lthreezone, lross, lrocrit
+    public :: lsolid, lthreezone, lross
     public :: iwind, nmod
 
     ! ---- wind law selection and physics parameters (from namelist) ----
@@ -79,9 +83,6 @@ module params
     ! (myr), applied to every track processed this run.
     real(8) :: pdisk, tlock
 
-    ! ---- run-time state (not a namelist input) ----
-    logical :: lrocrit
-
     ! ---- track-array dimension (set per call, not from the namelist) ----
     ! nmod = allocated length of this track's arrays (number of models)
     integer :: nmod
@@ -90,8 +91,8 @@ contains
 
     !---------------------------------------------------------------------
     ! Read the wind_params namelist group from nml_file into the
-    ! module's wind-law control variables, and reset the run-time
-    ! rossby-cutoff flag. Call once, before any calls to rotwind.
+    ! module's wind-law control variables. Call once, before any calls
+    ! to rotwind.
     !---------------------------------------------------------------------
     subroutine read_wind_params(nml_file)
         character(*), intent(in) :: nml_file
@@ -104,10 +105,6 @@ contains
         open(newunit=nml_unit, file=nml_file, status='old', action='read')
         read(nml_unit, nml=wind_params)
         close(nml_unit)
-
-        ! rossby-number cutoff always starts disengaged; solidevol/int1zone
-        ! enable it once (if) the track first drops below rocrit.
-        lrocrit = .false.
     end subroutine read_wind_params
 
     !---------------------------------------------------------------------
