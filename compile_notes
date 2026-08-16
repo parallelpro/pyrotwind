@@ -40,8 +40,25 @@ f2py -c --fcompiler=gfortran --opt='-O3' -m pyrotwind *.f90
 #   pyrotwind.params.read_wind_params('rotwind_example.nml')
 #
 #   for track in tracks:
-#       swe, swc, sj, sje, sjc, sprot, faccen, iermsg = pyrotwind.rotwind(
-#           track.taucouple,   # array, same length as track.sage
-#           track.sage, track.sl, track.sr, track.steffl, track.smcz,
-#           track.srcz, track.sxc, track.si, track.sie, track.sic,
-#           track.staucz, track.shec, track.sp, track.sm, track.nm)
+#       swe, swc, swcore, sj, sje, sjc, sjcore, sprot, faccen, iermsg = \
+#           pyrotwind.rotwind(
+#               track.taucouple,   # array, same length as track.sage
+#               track.taucouplecm, # array; only matters if lthreezone=.true.
+#               track.sage, track.sl, track.sr, track.steffl, track.smcz,
+#               track.srcz, track.sxc, track.si, track.sie, track.sic,
+#               track.sicore,      # he core inertia; all-zero if no 3-zone
+#               track.staucz, track.shec, track.sp, track.sm, track.nm)
+#
+# --- three-zone (core/middle/envelope) mode (2026) ---
+# set lthreezone=.true. in the wind_params namelist group to evolve a
+# growing helium core as a third zone (threezoneevol/int3zone), chained
+# core-middle-envelope with two independent coupling timescales
+# (taucouple for middle-envelope, taucouplecm for core-middle) and two
+# independent mass-transfer boundaries (fcz for middle-envelope, fcm for
+# core-middle, both built by setup from sie/sicore respectively).
+# threezoneevol also transparently handles tracks/points that have no
+# core zone yet (sicore <= 0) via the same int1zone/int2zone machinery
+# drevol uses, so lthreezone=.true. is safe to use across a whole run of
+# tracks even if only some of them ever grow a core. rotwind.f90's
+# outputs swcore/sjcore are only meaningful in this mode; they come back
+# as swcore=swc (corotating with the middle zone) and sjcore=0 otherwise.

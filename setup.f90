@@ -13,18 +13,25 @@
 !   fcen(j)    -- centrifugal-term factor 0.5*(rsun^3/msun/g)*r^3/m,
 !                 used to suppress the torque at fast rotation
 !                 (Matt et al. 2012).
-!   fcz(j)     -- for two-zone (core/envelope) models only: the rate of
-!                 angular-momentum exchange between core and envelope
-!                 as convection-zone mass is gained or lost. Formally
-!                 this should be d(j transferred)/dt = 2/3 r_cz^2 *
-!                 dm_cz/dt (Denissenkov et al. 2010), but r_cz and
-!                 m_cz are not available from the input tracks here.
-!                 Instead we use the equivalent full-derivative form
-!                 dj/dt = di(source)/dt * omega(source), which for the
-!                 envelope moment of inertia i_e works out to
+!   fcz(j)     -- for two-zone (core/envelope) and three-zone
+!                 (core/middle/envelope) models: the rate of
+!                 angular-momentum exchange between the envelope and the
+!                 zone below it (middle zone, or core if there is no
+!                 middle zone) as convection-zone mass is gained or
+!                 lost. Formally this should be d(j transferred)/dt =
+!                 2/3 r_cz^2 * dm_cz/dt (Denissenkov et al. 2010), but
+!                 r_cz and m_cz are not available from the input tracks
+!                 here. Instead we use the equivalent full-derivative
+!                 form dj/dt = di(source)/dt * omega(source), which for
+!                 the envelope moment of inertia i_e works out to
 !                 dj/dt = -di_e/dt * omega(source) (the sign flip
 !                 keeps the convention consistent with dm_cz/dt: fcz is
 !                 evaluated by spline-differentiating -i_e(age)).
+!   fcm(j)     -- three-zone models only: the same kind of exchange
+!                 term as fcz, but for the boundary between the core
+!                 and the middle zone, built the same way from
+!                 -i_core(age) (see threezoneevol/int3zone). Zero on
+!                 tracks with no core zone (sicore <= 0 throughout).
 !
 ! fk2 is the fixed centrifugal-suppression constant from Matt et al.
 ! (2012), set here rather than read from the namelist because it is a
@@ -38,8 +45,8 @@
 !   iwind = 3 : generalized pmm-style law in terms of user exponents
 !               pmma, pmmb, pmmc, pmmm (see Matt et al. 2012 / pmm12)
 !===============================================================================
-subroutine setup(nm, sage, sm, smcz, sp, sr, srcz, sie, &
-                  sl, excen, exw, fstruct, fcz, fcen, fk2)
+subroutine setup(nm, sage, sm, smcz, sp, sr, srcz, sie, sicore, &
+                  sl, excen, exw, fstruct, fcz, fcm, fcen, fk2)
     use params
     use constm
     implicit none
@@ -48,19 +55,25 @@ subroutine setup(nm, sage, sm, smcz, sp, sr, srcz, sie, &
     ! sage = age (yr), sl = l/lsun sr = r/rsun sm = m/msun
     ! srcz = r of cz base (cgs) smcz = mass of surface cz, msun
     ! sie = envelope moment of inertia (cgs)
+    ! sicore = core moment of inertia (cgs), three-zone models only;
+    !          pass all-zero if the track never has a core zone
     ! sp = atm pressure tau=2/3
     integer, intent(in) :: nm
     real(8), intent(in), dimension(nmod) :: sage, sm, sr, &
-        smcz, srcz, sl, sp, sie
+        smcz, srcz, sl, sp, sie, sicore
     ! outputs - cgs units. loss law has the form jdot=fstruct*f(omega); for
     ! 2-zone models the material that moves between core and envelope
     ! carries angular momentum accounted for via fcz (see header above).
-    real(8), intent(out), dimension(nmod) :: fstruct, fcz, fcen
+    ! fcm is the equivalent term for the core/middle boundary in
+    ! three-zone models.
+    real(8), intent(out), dimension(nmod) :: fstruct, fcz, fcm, fcen
     real(8), intent(out) :: exw, excen, fk2
     ! local: exponents for factors in the loss law
     real(8) :: exr, exm, expr, exl, fwind
-    ! local: spline interpolation vectors for d(-i_envelope)/dt
+    ! local: spline interpolation vectors for d(-i_envelope)/dt and,
+    ! for three-zone models, d(-i_core)/dt
     real(8), dimension(nmod) :: ydiedt, xmid, diedt
+    real(8), dimension(nmod) :: ydicdt, dicdt
     real(8) :: h, fm
     integer :: j, jjj
 
@@ -132,6 +145,25 @@ subroutine setup(nm, sage, sm, smcz, sp, sr, srcz, sie, &
         fm = (diedt(jjj)-diedt(jjj-1))/h- &
              h*ydiedt(jjj-1)/6.0d0+h*ydiedt(jjj)/3.0d0
         fcz(jjj) = fm
+
+        ! same construction for the core/middle boundary in three-zone
+        ! models, built from -i_core(age) instead of -i_envelope(age).
+        ! on a track that never has a core zone (sicore all zero) this
+        ! comes out identically zero, so it is always safe to compute.
+        do j = 1, jjj
+            dicdt(j) = -sicore(j)
+        end do
+        call splinc(xmid, dicdt, ydicdt, jjj)
+        do j = 1, jjj-1
+            h = xmid(j+1)-xmid(j)
+            fm = (dicdt(j+1)-dicdt(j))/h+ &
+                 h*ydicdt(j)/3.0d0-h*ydicdt(j+1)/6.0d0
+            fcm(j) = fm
+        end do
+        h = xmid(jjj)-xmid(jjj-1)
+        fm = (dicdt(jjj)-dicdt(jjj-1))/h- &
+             h*ydicdt(jjj-1)/6.0d0+h*ydicdt(jjj)/3.0d0
+        fcm(jjj) = fm
     endif
     return
 end

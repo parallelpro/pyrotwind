@@ -32,9 +32,15 @@
 /
 
 &wind_params
-! lsolid = t -> solid-body rotation (solidevol); f -> two-zone
-! core/envelope model (drevol).
+! lsolid = t -> solid-body rotation (solidevol); f -> core/envelope
+! model, chosen by lthreezone below (drevol or threezoneevol).
   lsolid  = .false.
+
+! lthreezone = t -> three-zone core/middle/envelope model (threezoneevol),
+! for tracks that grow a helium core (also handles tracks that never
+! grow one); f -> ordinary two-zone core/envelope model (drevol).
+! only consulted when lsolid = f.
+  lthreezone = .true.
 
 ! iwind: 1 = no angular-momentum loss, 2 = Kawaler (1988), 3 = pmm-style
 ! generalized law (requires pmma/pmmb/pmmc/pmmm below).
@@ -65,7 +71,7 @@
 ! (solar_prot/solar_tau). e.g. rocrit = 2.0 disables wind loss once a
 ! star's rotation-period-to-convective-timescale ratio exceeds twice
 ! the sun's.
-  rocrit = 2.00d0
+  rocrit = 0.91d0
 
 ! initial (disk-locked) rotation period (days) and disk lifetime (Myr),
 ! applied to every track processed this run.

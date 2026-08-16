@@ -97,12 +97,19 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
     integer, dimension(11) :: nseq = (/2,4,6,8,12,16,24,32,48,64,96/)
     integer, parameter :: imax=11, nuse=7
     real(8), parameter :: eps=1.0d-5
+    ! below this fraction of the total moment of inertia, the core/envelope
+    ! split (sic = si-sie) is a small residual of two much larger,
+    ! independently spline-interpolated quantities and is not numerically
+    ! trustworthy from cubic interpolation alone (see the linear-fallback
+    ! block below).
+    real(8), parameter :: sicfrac=1.0d-3
 
     ! scalars
     real(8) :: t1, hh, h1, a, b
     real(8) :: si0, si1, sie0, sie1, sic0, sic1
     real(8) :: sstr0, sstr1, scen0, scen1, srcz0, srcz1
     real(8) :: stau0, stau1, staumin, staumax
+    real(8) :: srczmin, srczmax
     real(8) :: swe0, swe1, swc0, swc1
     real(8) :: w0, w1, wc0, wc1, wtest
     real(8) :: fcc0, fcc1, fc0, fc1
@@ -125,6 +132,12 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
     ! the endpoint values.
     staumin = min(staucz(j-1), staucz(j))
     staumax = max(staucz(j-1), staucz(j))
+    ! fcz is a spline derivative (see setup.f90) and can overshoot sharply
+    ! at a non-monotonic feature in sie (e.g. the RGB bump); restrict the
+    ! interpolated mass-transfer rate to within the tabulated endpoint
+    ! values for the same reason staucz is clamped above.
+    srczmin = min(fcz(j-1), fcz(j))
+    srczmax = max(fcz(j-1), fcz(j))
     ! scale error in loss rate by initial loss rate
     wtest = sje0/sie(j-1)
     if (lross) then
@@ -168,6 +181,8 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
         ! 2/3 radius of cz base ^2 * dm/dt
         srcz0 = a*fcz(j-1)+b*fcz(j)+ &
                 ((a**3-a)*ycz(j-1)+(b**3-b)*ycz(j))*(hh**2)/6.0d0
+        srcz0 = max(srcz0, srczmin)
+        srcz0 = min(srcz0, srczmax)
         ! core-envelope coupling timescale (yr), interpolated like the other
         ! track arrays, then converted to gyr
         tcouple0 = 1.0d-9*(a*taucouple(j-1)+b*taucouple(j)+ &
@@ -196,8 +211,10 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
             w0 = swe0
             wc0 = wcrit
         endif
-        ! core i can start as zero,initialize with envelope omega if true
-        if (sic0.le.0.0d0) then
+        ! core i can start as zero (or a numerically untrustworthy small
+        ! residual, see the sicfrac note above), initialize with envelope
+        ! omega if true
+        if (sic0.le.0.0d0 .or. sic0.lt.sicfrac*si0) then
             swc0 = swe0
         else
             swc0 = sjc0/sic0
@@ -219,8 +236,11 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
             ! core moment of inertia = difference between total and envelope
             sic1 = si1 - sie1
             ! although the starting core i can be zero, it should be nonzero
-            ! at intermediate times
-            if (sic1.le.0.0d0) then
+            ! at intermediate times. also fall back to linear interpolation
+            ! if sic1 is merely a small (numerically untrustworthy) residual
+            ! of si1 and sie1, not just when it is outright non-positive --
+            ! see the sicfrac note above.
+            if (sic1.le.0.0d0 .or. sic1.lt.sicfrac*si1) then
                 ! switch to linear interpolation in moment of inertia
                 si1 = si(j-1)+b*(si(j)-si(j-1))
                 sie1 = sie(j-1)+b*(sie(j)-sie(j-1))
@@ -239,6 +259,8 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
             ! radius of cz base, cm
             srcz1 = a*fcz(j-1)+b*fcz(j)+ &
                     ((a**3-a)*ycz(j-1)+(b**3-b)*ycz(j))*(hh**2)/6.0d0
+            srcz1 = max(srcz1, srczmin)
+            srcz1 = min(srcz1, srczmax)
             ! core-envelope coupling timescale (yr), interpolated, then gyr
             tcouple1 = 1.0d-9*(a*taucouple(j-1)+b*taucouple(j)+ &
                        ((a**3-a)*ycouple(j-1)+(b**3-b)*ycouple(j))*(hh**2)/6.0d0)

@@ -30,7 +30,7 @@ module params
     public :: read_wind_params, set_nmod
     public :: fk, pmma, pmmb, pmmc, pmmm, soljdot, solmdot, wcrit, rocrit
     public :: pdisk, tlock
-    public :: lsolid, lross, lrocrit
+    public :: lsolid, lthreezone, lross, lrocrit
     public :: iwind, nmod
 
     ! ---- wind law selection and physics parameters (from namelist) ----
@@ -42,8 +42,19 @@ module params
     integer :: iwind
 
     ! lsolid = .true.  -> enforce solid-body rotation (see solidevol)
-    !        = .false. -> evolve a two-zone core/envelope model (see drevol)
+    !        = .false. -> evolve a core/envelope model (see drevol/
+    !                     threezoneevol); which of those two is used is
+    !                     controlled by lthreezone below
     logical :: lsolid
+
+    ! lthreezone = .true.  -> evolve the three-zone core/middle/envelope
+    !                         model (see threezoneevol), which also
+    !                         subsumes the ordinary two-zone case for
+    !                         tracks that never grow a core zone
+    !            = .false. -> evolve the plain two-zone core/envelope
+    !                         model (see drevol), as before
+    ! only consulted when lsolid = .false.
+    logical :: lthreezone
 
     ! lross = .true. -> scale the saturation threshold by the rossby
     ! number, using the local convective-overturn timescale
@@ -86,7 +97,7 @@ contains
         character(*), intent(in) :: nml_file
         integer :: nml_unit
 
-        namelist /wind_params/ lsolid, iwind, lross, fk, pmma, pmmb, &
+        namelist /wind_params/ lsolid, lthreezone, iwind, lross, fk, pmma, pmmb, &
                                 pmmc, pmmm, soljdot, solmdot, wcrit, rocrit, &
                                 pdisk, tlock
 
