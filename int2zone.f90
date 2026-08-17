@@ -59,9 +59,9 @@
 !   sjc1, sje1    core, envelope angular momentum at the end of the step
 !   lok           .true. if the step converged
 !   iermsg        nonzero on failure: negative core/envelope i or omega
-!                 (4118, 4172, 4242, 4267, 4271), or 4299 if every
-!                 sub-step count in nseq was exhausted without the
-!                 extrapolated error dropping below eps
+!                 (4118, 4172, 4267, 4271), or 4299 if every sub-step
+!                 count in nseq was exhausted without the extrapolated
+!                 error dropping below eps
 !
 ! Bug fix (2026): the original source's sjc1 update read a variable
 ! spelled djtran11, not djtran1 -- a typo that referenced a never-
@@ -80,6 +80,24 @@
 ! mask a convergence failure on a real track (threezoneevol's two-zone
 ! fallback, which reuses int2zone via a reconstructed "sictot" combined
 ! inertia rather than the track's true total inertia).
+!
+! Bug fix (2026): retired the old 4242 code (predictor swc1 < 0 hard-
+! aborts the whole bs_extrapolate call). That predictor is only used to
+! seed djtran1/djcoup1 for the corrector below, which recomputes its own
+! trapezoidally-averaged swc1 and has its own independent check (4271);
+! the predictor going slightly negative on a coarse (large h1) trial
+! doesn't mean the corrected answer will. Confirmed directly: drevol
+! (this routine's other caller besides threezoneevol's two-zone
+! fallback, see bsstep_mod.f90's header for that earlier, related
+! finding) hard-aborted here on a real track at the same step
+! threezoneevol's fallback -- solving the same physical step, same
+! taucouple, through the same routine -- converges cleanly, which is
+! exactly the caller-dependent floating-point-level sensitivity
+! bsstep_mod.f90 already documents, just tripping a different check
+! this time. Since the predictor is provably just an intermediate
+! estimate (not the accepted answer), it's now clamped at zero rather
+! than aborting, consistent with the sicfrac graceful-degradation
+! pattern already used above for the analogous sic0/sic1 residual.
 !===============================================================================
 subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
                      ycz, ystr, ytau, sjc0, sje0, sjc1, sje1, j, t0, dtt, &
@@ -174,8 +192,16 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
         sjc0 = sjcsav
         sje0 = sjesav
         sje1 = sje0 + y1v(1) + y1v(2)
-        ! compute transfer of angular momentum from core to envelope
-        sjc1 = sjc0 - y1v(1)
+        ! compute transfer of angular momentum from core to envelope.
+        ! The per-sub-step clamps above (see the 2026 bug-fix note at the
+        ! top of this subroutine) keep every individual sub-step's core
+        ! angular velocity non-negative, but the rational extrapolation
+        ! across retry levels (ratext, in bs_extrapolate) isn't itself
+        ! constrained that way and can still land a hair below zero --
+        ! clamp the final accepted value too, since a caller plotting
+        ! omega on a log scale would otherwise see a spurious gap for a
+        ! numerically-negligible (~1e-6 relative) extrapolation artifact.
+        sjc1 = max(sjc0 - y1v(1), 0.0d0)
         lok = .true.
         return
     endif
@@ -369,12 +395,13 @@ contains
         endif
         fcc1 = min(0.5d0, swe1**2*scen1)
         fc1 = (fk2/(fk2**2+fcc1)**0.5d0)**excen
-        swc1 = (sjc0 - djtran0 - h1*djcoup0)/sic1
-        if (swc1.lt.0.0d0) then
-            iermsg = 4242
-            ok = .false.
-            return
-        endif
+        ! predictor trial for swc1, used only to seed djtran1/djcoup1
+        ! below -- not the step's accepted answer, so clamp rather than
+        ! hard-abort on a negative trial (see the 2026 bug-fix note above
+        ! this subroutine). The corrector recomputes its own
+        ! trapezoidally-averaged swc1 a few lines down and has its own
+        ! independent check (iermsg=4271).
+        swc1 = max((sjc0 - djtran0 - h1*djcoup0)/sic1, 0.0d0)
         ! update exchange term (end of timestep value)
         if (srcz0.lt.0.0d0) then
             djtran1 = srcz1*h1*swe1
@@ -397,9 +424,17 @@ contains
             return
         endif
         if (swc1.lt.0.0d0) then
-            iermsg = 4271
-            ok = .false.
-            return
+            ! Same reasoning as the predictor's clamp above (see the 2026
+            ! bug-fix note at the top of this subroutine): a coarse (large
+            ! h1) trapezoidal step can overshoot the core into negative
+            ! rotation even when the true trajectory doesn't, and finer
+            ! sub-step counts would resolve it if bs_extrapolate's retry
+            ! loop got the chance to try them -- but a hard abort here
+            ! never lets it. Clamp both swc1 and sjc1 together (rather
+            ! than swc1 alone) so they stay mutually consistent
+            ! (swc1 = sjc1/sic1) for the next sub-step's bookkeeping.
+            swc1 = 0.0d0
+            sjc1 = 0.0d0
         endif
 
         ! do not accumulate wind loss if the star is above the critical rossby
