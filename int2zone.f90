@@ -58,7 +58,10 @@
 ! Outputs:
 !   sjc1, sje1    core, envelope angular momentum at the end of the step
 !   lok           .true. if the step converged
-!   iermsg        nonzero on failure (negative core/envelope i or omega)
+!   iermsg        nonzero on failure: negative core/envelope i or omega
+!                 (4118, 4172, 4242, 4267, 4271), or 4299 if every
+!                 sub-step count in nseq was exhausted without the
+!                 extrapolated error dropping below eps
 !
 ! Bug fix (2026): the original source's sjc1 update read a variable
 ! spelled djtran11, not djtran1 -- a typo that referenced a never-
@@ -67,6 +70,16 @@
 ! original source and traced to real symptoms (surface rotation period
 ! collapsing toward zero within a few models). Fixed here to read
 ! djtran1.
+!
+! Bug fix (2026): the sub-step-count-exhaustion path used to leave
+! iermsg at its initial 0 -- indistinguishable from success to a caller
+! that only checks iermsg -- silently truncating the rest of a track's
+! evolution (rotwind stops updating everything once one step fails).
+! int3zone's header already documented and fixed this same gap (its
+! 5299 code); fixed here too as 4299, after it was directly observed to
+! mask a convergence failure on a real track (threezoneevol's two-zone
+! fallback, which reuses int2zone via a reconstructed "sictot" combined
+! inertia rather than the track's true total inertia).
 !===============================================================================
 subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
                      ycz, ystr, ytau, sjc0, sje0, sjc1, sje1, j, t0, dtt, &
@@ -164,7 +177,19 @@ subroutine int2zone(sage, si, sie, staucz, fcz, fstruct, yi, yie, &
         ! compute transfer of angular momentum from core to envelope
         sjc1 = sjc0 - y1v(1)
         lok = .true.
+        return
     endif
+    ! exhausted every sub-step count in nseq without the extrapolated
+    ! error dropping below eps. This used to leave iermsg at its initial
+    ! 0 -- indistinguishable from success to a caller that only checks
+    ! iermsg -- exactly the silent-failure gap int3zone's own header
+    ! already documented and fixed (see its 5299 code). Confirmed to
+    ! mask a real convergence failure on a real track (threezoneevol's
+    ! two-zone fallback, reusing int2zone via a reconstructed "sictot"),
+    ! so fixed here the same way: only set if substep2 didn't already
+    ! record a more specific code before returning not-converged.
+    if (iermsg.eq.0) iermsg = 4299
+    lok = .false.
     return
 
 contains
