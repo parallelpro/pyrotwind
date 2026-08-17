@@ -41,7 +41,10 @@
 !===============================================================================
 subroutine ratext(iest, xest, yest, yz, dy, nv, nuse)
     implicit none
-    integer, parameter :: imax=11, nmax=15, ncol=7
+    ! imax bounds the x(imax) tableau below and must be >= bsstep_mod's
+    ! bs_imax (the largest iest any caller will pass) -- see that
+    ! module's header for why it's 15, not the original 11.
+    integer, parameter :: imax=15, nmax=15, ncol=7
     ! input
     integer, intent(in) :: iest, nv, nuse
     real(8), intent(in) :: xest

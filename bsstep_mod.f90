@@ -43,6 +43,37 @@
 ! extrapolation), so which quantity is extrapolated is preserved exactly
 ! as in the original separate routines, not standardized to one or the
 ! other.
+!
+! bs_imax/nseq (2026): extended from the original 11 levels (max sub-step
+! count 96) to 15 levels (max 384). The original 11-level sequence still
+! comes first unchanged, so any step that already converged within it
+! still converges at the exact same retry and gets the exact same
+! extrapolated result -- this is a strictly additive change, never a
+! behavior change, for every case that isn't hitting the ceiling. It was
+! added after finding a real track (an ~11 Gyr subgiant/RGB evolution)
+! where int2zone, called from threezoneevol's two-zone fallback, ran out
+! of retries and failed to converge (exhausting all 11 levels without the
+! extrapolated error dropping below eps) at one specific step -- which,
+! since rotwind stops updating everything once a step fails, truncated
+! the rest of that track's rotation-rate evolution to zero.
+!
+! That failure was chased at length before landing here: the same step,
+! fed bit-identical time steps and even a bit-identical total moment of
+! inertia (temporarily threading the caller's true si through
+! threezoneevol instead of its reconstructed sic+sie sum, as an
+! experiment) still failed identically, which rules out a reconstruction/
+! precision bug in the caller. drevol, solving the same physical step
+! through int2zone via a different caller, converges fine. So the two
+! callers' trajectories must be diverging from small floating-point-level
+! differences building up over ~150 earlier steps (confirmed accumulating
+! to a ~0.05% difference in the angular momenta feeding int2zone by the
+! failing step) until the failing one lands somewhere int2zone's original
+! 11-level ceiling isn't quite enough -- i.e. genuine, if narrow,
+! numerical sensitivity in the coupled ODE system at that point, not a
+! logic bug. Extending the ceiling gives it the extra refinement it
+! needs; the track converges cleanly (iermsg=0) through all ~1500 models
+! with this change, with no measurable performance cost (the extra levels
+! are only ever reached by steps that would otherwise have failed).
 !===============================================================================
 module bsstep_mod
     implicit none
@@ -50,7 +81,7 @@ module bsstep_mod
     public :: bs_extrapolate, bs_reset_iface, bs_substep_iface
     public :: bs_imax, bs_nuse, bs_nmax, bs_eps
 
-    integer, parameter :: bs_imax = 11, bs_nuse = 7, bs_nmax = 15
+    integer, parameter :: bs_imax = 15, bs_nuse = 7, bs_nmax = 15
     real(8), parameter :: bs_eps = 1.0d-5
 
     abstract interface
@@ -84,7 +115,7 @@ contains
         logical, intent(out) :: converged
 
         integer, dimension(bs_imax) :: nseq = &
-            (/2,4,6,8,12,16,24,32,48,64,96/)
+            (/2,4,6,8,12,16,24,32,48,64,96,144,192,256,384/)
         real(8) :: h1, t1, xest, errmax
         real(8), dimension(bs_nmax) :: yest, yout, yerr
         real(8), dimension(nv) :: y
